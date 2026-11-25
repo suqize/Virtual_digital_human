@@ -1,0 +1,20 @@
+{
+  "name": "avatar-web-sdk-quick-start-demo-volcengine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Avatar Web SDK Quick Start Demo (VolcEngine): demonstrates the three core lifecycle operations - Call / Talk / Hang up.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+  "@volcengine/avatar-web-sdk": "^1.0.0",
+  "@volcengine/rtc": "^4.68.4",
+  "eventemitter3": "^5.0.4"
+},
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

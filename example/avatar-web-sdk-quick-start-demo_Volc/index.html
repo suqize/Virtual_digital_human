@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Avatar SDK Quick Start Demo (VolcEngine)</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app__header">
+        <h1>Avatar Quick Start</h1>
+        <p class="app__subtitle">One avatar + Call / Talk / Hang up</p>
+      </header>
+
+      <section class="avatar" aria-label="Avatar rendering area">
+        <div id="avatar-container" class="avatar__canvas"></div>
+        <p id="status" class="avatar__status" aria-live="polite">Status: idle</p>
+      </section>
+
+      <section class="controls" aria-label="Action buttons">
+        <button id="btn-call" type="button" class="btn btn--primary">Call</button>
+        <button id="btn-talk" type="button" class="btn" disabled>Talk</button>
+        <button id="btn-hangup" type="button" class="btn btn--danger" disabled>Hang up</button>
+      </section>
+
+      <section class="config" aria-label="Configuration panel">
+        <label class="field">
+          <span class="field__label">appKey</span>
+          <input id="cfg-appkey" class="field__input" type="text" placeholder="Enter your appKey" />
+        </label>
+        <label class="field">
+          <span class="field__label">secretKey</span>
+          <input id="cfg-secretkey" class="field__input" type="password" placeholder="Enter your secretKey" />
+        </label>
+        <label class="field">
+          <span class="field__label">avatarImageUrl</span>
+          <input
+            id="cfg-avatar"
+            class="field__input"
+            type="text"
+            placeholder="HTTPS image URL for the avatar"
+          />
+        </label>
+        <label class="field">
+          <span class="field__label">speaker</span>
+          <input
+            id="cfg-speaker"
+            class="field__input"
+            type="text"
+            placeholder="e.g. saturn_zh_female_aojiaonvyou_tob"
+          />
+        </label>
+      </section>
+
+      <section class="log" aria-label="Log">
+        <h2>Log</h2>
+        <pre id="log" class="log__body" aria-live="polite"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
