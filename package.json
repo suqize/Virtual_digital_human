@@ -1,17 +1,23 @@
 {
-  "name": "math-teacher-avatar-demo",
+  "name": "zhizhi-classroom-demo",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.js",
     "build": "vite build --config vite.config.js",
-    "preview": "vite preview --config vite.config.js"
+    "preview": "vite preview --config vite.config.js",
+    "typecheck": "vue-tsc --noEmit -p web/tsconfig.json"
   },
   "dependencies": {
-    "@volcengine/avatar-web-sdk": "1.0.3"
+    "@volcengine/avatar-web-sdk": "1.0.3",
+    "echarts": "^6.1.0",
+    "vue": "^3.5.46"
   },
   "devDependencies": {
-    "vite": "^7.0.0"
+    "@vitejs/plugin-vue": "^6.0.11",
+    "typescript": "^6.0.3",
+    "vite": "^7.0.0",
+    "vue-tsc": "^3.3.14"
   }
 }

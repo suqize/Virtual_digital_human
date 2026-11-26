@@ -1,15 +1,19 @@
-"""知知老师：LinkAPI 数学答疑 + 火山引擎实时数字人课堂。"""
+"""知之课堂：课堂工作台 / 课后评价 / 下节课方案 + 火山引擎实时数字人（课堂情境可配置）。"""
 
 from __future__ import annotations
 
 import json
 import mimetypes
 import os
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Callable
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from urllib.parse import unquote, urlsplit
+
+from classroom import classroom
 
 
 ROOT = Path(__file__).resolve().parent
@@ -18,9 +22,25 @@ DEFAULT_LLM_BASE_URL = "https://linkapi.ai/v1"
 DEFAULT_LLM_MODEL = "gpt-6-sol"
 MAX_REQUEST_BYTES = 32_000
 
-SYSTEM_PROMPT = """你是一位耐心、清晰、鼓励学生思考的中文数学老师。请根据学生的问题讲清楚数学思路。
+DEFAULT_CLASSROOM_SCENARIO = "数学"
 
-要求：用简体中文；按步骤推导并解释每一步；必要时先询问年级或题目条件；发现计算错误时温和纠正；答案适合数字人朗读，不使用 Markdown 标题、表格、LaTeX 或代码块，算式尽量写成自然口语；回复控制在 700 个汉字以内，结尾可邀请学生继续提问。"""
+ALLOWED_AVATAR_ACTIONS = (
+    "聆听（不说话） - 自然呼吸",
+    "聆听（不说话） - 开心",
+    "聆听（不说话） - 惊讶",
+    "复位 - 复位",
+)
+
+QUICK_QUESTIONS = {
+    "数学": ["怎么解一元一次方程？", "为什么三角形内角和是180°？", "讲讲分数通分"],
+    "历史": ["讲讲唐朝的繁荣与开放", "用时间轴梳理近代化探索", "中考常考的史实对比有哪些？"],
+    "语文": ["怎么写好一篇记叙文？", "讲讲古诗词赏析方法", "文言文怎么快速读懂？"],
+    "英语": ["怎么记住不规则动词？", "讲讲定语从句的用法", "如何提高英语阅读速度？"],
+    "物理": ["讲讲牛顿第一定律", "怎么分析物体的受力？", "电学实验常考哪些点？"],
+    "化学": ["讲讲质量守恒定律", "怎么配平化学方程式？", "常见气体的实验室制法"],
+}
+
+DEFAULT_QUICK_QUESTIONS = ["帮我讲解一个知识点", "给我出一道练习题", "总结今天学习的重点"]
 
 def load_local_env() -> None:
     """读取项目 .env，操作系统中已设置的变量优先。"""
@@ -38,6 +58,48 @@ def load_local_env() -> None:
             os.environ[name] = value
 
 
+def get_classroom_scenario() -> str:
+    load_local_env()
+    return os.getenv("CLASSROOM_SCENARIO", "").strip() or DEFAULT_CLASSROOM_SCENARIO
+
+
+def get_quick_questions(scenario: str) -> list[str]:
+    if scenario in QUICK_QUESTIONS:
+        return list(QUICK_QUESTIONS[scenario])
+    for subject, questions in QUICK_QUESTIONS.items():
+        if subject in scenario:
+            return list(questions)
+    return list(DEFAULT_QUICK_QUESTIONS)
+
+
+def build_teacher_prompt(scenario: str) -> str:
+    return (
+        f"你是一位耐心、清晰、鼓励学生思考的中文{scenario}老师。请根据学生的问题讲清楚思路和要点。\n\n"
+        "要求：用简体中文；按步骤讲解并解释每一步；必要时先询问年级或学习基础；发现错误时温和纠正；"
+        "答案适合数字人朗读，不使用 Markdown 标题、表格、LaTeX 或代码块，专业内容尽量写成自然口语；"
+        "回复控制在 700 个汉字以内，结尾可邀请学生继续提问。"
+    )
+
+
+def get_volc_avatar_actions() -> list[str]:
+    raw = os.getenv("VOLC_AVATAR_ACTIONS", "").strip()
+    if not raw:
+        return list(ALLOWED_AVATAR_ACTIONS)
+    actions: list[str] = []
+    for part in re.split(r"[,，;；|]+", raw):
+        action = part.strip()
+        if not action:
+            continue
+        if action not in ALLOWED_AVATAR_ACTIONS:
+            raise RuntimeError(
+                f"VOLC_AVATAR_ACTIONS 包含不支持的动作「{action}」。"
+                f"目前仅支持：{'、'.join(ALLOWED_AVATAR_ACTIONS)}"
+            )
+        if action not in actions:
+            actions.append(action)
+    return actions or list(ALLOWED_AVATAR_ACTIONS)
+
+
 def _clean_error(value: object) -> str:
     message = str(value)
     for name in (
@@ -51,7 +113,7 @@ def _clean_error(value: object) -> str:
     return message[:900]
 
 
-def get_volc_avatar_config() -> dict[str, str]:
+def get_volc_avatar_config() -> dict[str, object]:
     load_local_env()
     access_key_id = os.getenv("VOLC_ACCESS_KEY_ID", "").strip()
     secret_access_key = os.getenv("VOLC_SECRET_ACCESS_KEY", "").strip()
@@ -69,12 +131,15 @@ def get_volc_avatar_config() -> dict[str, str]:
         raise RuntimeError("请先在 .env 配置火山引擎数字人参数：" + ", ".join(missing))
     if not image_url.startswith("https://"):
         raise RuntimeError("VOLC_AVATAR_IMAGE_URL 必须是可公开访问的 HTTPS 图片地址。")
+    scenario = get_classroom_scenario()
     return {
         "appKey": access_key_id,
         "secretKey": secret_access_key,
         "avatarImageUrl": image_url,
         "speaker": os.getenv("VOLC_AVATAR_SPEAKER", "saturn_zh_female_aojiaonvyou_tob").strip(),
-        "userPrompt": os.getenv("VOLC_AVATAR_USER_PROMPT", "").strip() or SYSTEM_PROMPT,
+        "userPrompt": os.getenv("VOLC_AVATAR_USER_PROMPT", "").strip() or build_teacher_prompt(scenario),
+        "actionList": get_volc_avatar_actions(),
+        "classroomScenario": scenario,
     }
 
 def call_model(history: list[dict[str, str]]) -> str:
@@ -86,7 +151,7 @@ def call_model(history: list[dict[str, str]]) -> str:
     model = os.getenv("LINKAPI_MODEL", DEFAULT_LLM_MODEL)
     payload = {
         "model": model,
-        "messages": [{"role": "system", "content": SYSTEM_PROMPT}, *history],
+        "messages": [{"role": "system", "content": build_teacher_prompt(get_classroom_scenario())}, *history],
     }
     request = Request(
         f"{base_url}/chat/completions",
@@ -119,7 +184,7 @@ def call_model(history: list[dict[str, str]]) -> str:
     if isinstance(content, list):
         content = "\n".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
     if not isinstance(content, str) or not content.strip():
-        raise RuntimeError("数学老师暂时没有生成回复，请稍后重试。")
+        raise RuntimeError("老师暂时没有生成回复，请稍后重试。")
     return content.strip()
 
 
@@ -140,7 +205,7 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict:
 
 
 class DemoHandler(BaseHTTPRequestHandler):
-    server_version = "MathTeacherAvatarDemo/3.0"
+    server_version = "ClassroomAvatarDemo/3.1"
 
     def _serve_frontend(self) -> None:
         dist_root = WEB_DIST.resolve()
@@ -176,6 +241,15 @@ class DemoHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(config)
             return
+        if self.path == "/api/classroom/state":
+            self._send_json(classroom.snapshot())
+            return
+        if self.path == "/api/evaluation":
+            self._send_json(classroom.evaluation())
+            return
+        if self.path == "/api/plan":
+            self._send_json(classroom.plan())
+            return
         if self.path == "/api/health":
             load_local_env()
             names = (
@@ -187,6 +261,13 @@ class DemoHandler(BaseHTTPRequestHandler):
             image_url = os.getenv("VOLC_AVATAR_IMAGE_URL", "").strip()
             if image_url and not image_url.startswith("https://"):
                 missing.append("VOLC_AVATAR_IMAGE_URL（需要 HTTPS）")
+            scenario = get_classroom_scenario()
+            try:
+                action_list = get_volc_avatar_actions()
+                action_error = None
+            except RuntimeError as exc:
+                action_list = []
+                action_error = str(exc)
             self._send_json(
                 {
                     "ok": True,
@@ -195,6 +276,10 @@ class DemoHandler(BaseHTTPRequestHandler):
                     "missingAvatarConfig": missing,
                     "model": os.getenv("LINKAPI_MODEL", DEFAULT_LLM_MODEL),
                     "avatarProvider": "volcengine",
+                    "classroomScenario": scenario,
+                    "quickQuestions": get_quick_questions(scenario),
+                    "actionList": action_list,
+                    "actionError": action_error,
                 }
             )
             return
@@ -204,7 +289,31 @@ class DemoHandler(BaseHTTPRequestHandler):
         if self.path == "/api/teach":
             self._teach()
             return
+        if self.path == "/api/classroom/interact":
+            self._classroom_action(lambda: self._classroom_interact())
+            return
+        if self.path == "/api/classroom/next-round":
+            self._classroom_action(classroom.next_round)
+            return
+        if self.path == "/api/classroom/end":
+            self._classroom_action(classroom.end_class)
+            return
+        if self.path == "/api/classroom/reset":
+            self._classroom_action(classroom.reset)
+            return
         self.send_error(404, "Not found")
+
+    def _classroom_action(self, action: Callable[[], dict]) -> None:
+        try:
+            self._send_json(action())
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=400)
+        except RuntimeError as exc:
+            self._send_json({"error": str(exc)}, status=500)
+
+    def _classroom_interact(self) -> dict:
+        data = _read_json(self)
+        return classroom.interact(str(data.get("text", "")))
 
     def _teach(self) -> None:
         try:
@@ -214,7 +323,7 @@ class DemoHandler(BaseHTTPRequestHandler):
             return
         question = data.get("message")
         if not isinstance(question, str) or not question.strip():
-            self._send_json({"error": "请填写一道数学问题。"}, status=400)
+            self._send_json({"error": "请填写你要咨询的问题。"}, status=400)
             return
         question = question.strip()
         if len(question) > 4000:
@@ -263,7 +372,7 @@ def main() -> None:
     if not 1 <= port <= 65535:
         raise SystemExit("PORT 必须在 1 到 65535 之间。")
     server = ThreadingHTTPServer((host, port), DemoHandler)
-    print(f"知知老师数字人 Demo：http://{host}:{port}")
+    print(f"知之课堂 Demo：http://{host}:{port}")
     print("按 Ctrl+C 停止服务；请在浏览器结束数字人会话以释放资源。")
     try:
         server.serve_forever()
