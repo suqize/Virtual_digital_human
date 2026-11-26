@@ -38,10 +38,11 @@ async function submit(): Promise<void> {
     <header class="card-head">
       <h3 class="card-title">课堂互动记录</h3>
       <span class="card-extra">
-        {{ interactions.filter((item) => item.role === 'student').length }} 次学生互动
+        {{ interactions.filter((item) => item.role === 'student').length }} 次实际学生互动
       </span>
     </header>
     <div class="card-body">
+      <p class="interaction-record-note">记录本堂课实际提交的学生回答，以及老师基于回答生成的回复。</p>
       <div ref="listRef" class="chat-list">
         <div v-for="item in interactions" :key="item.id" class="msg" :class="item.role === 'student' ? 'msg-student' : 'msg-teacher'">
           <span class="msg-avatar">{{ item.role === 'student' ? '林' : '周' }}</span>

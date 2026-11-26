@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import * as echarts from 'echarts';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { CognitionPoint } from '../types';
+import type { CognitionPoint, PredictionRun } from '../types';
 
 const props = defineProps<{
   history: CognitionPoint[];
   prediction: CognitionPoint[];
+  predictionHistory: PredictionRun[];
   currentScore: number;
   predictedScore: number;
 }>();
@@ -21,8 +22,34 @@ function toSeconds(value: string): number {
 
 function render(): void {
   if (!chart) return;
+  const lastHistory = props.history[props.history.length - 1];
+  const currentTime = lastHistory?.time ?? '00:00';
+  const currentSeconds = toSeconds(currentTime);
+  const predictionByTime = new Map<string, CognitionPoint>();
+  for (const run of props.predictionHistory) {
+    const generatedAt = toSeconds(run.generatedAt);
+    const runAnchor = run.points[0];
+    if (runAnchor && generatedAt <= currentSeconds && !predictionByTime.has(run.generatedAt)) {
+      predictionByTime.set(run.generatedAt, { time: run.generatedAt, score: runAnchor.score });
+    }
+    for (const point of run.points) {
+      const pointTime = toSeconds(point.time);
+      if (generatedAt <= pointTime && pointTime <= currentSeconds && !predictionByTime.has(point.time)) {
+        predictionByTime.set(point.time, point);
+      }
+    }
+  }
+  const currentAnchor = props.prediction[0];
+  if (currentAnchor) {
+    predictionByTime.set(currentTime, { time: currentTime, score: currentAnchor.score });
+  }
+  for (const point of props.prediction.slice(1)) {
+    if (toSeconds(point.time) > currentSeconds) predictionByTime.set(point.time, point);
+  }
+  const strategyPrediction = [...predictionByTime.values()].sort((a, b) => toSeconds(a.time) - toSeconds(b.time));
+
   const axisMap = new Map<string, number>();
-  for (const point of [...props.history, ...props.prediction]) {
+  for (const point of [...props.history, ...strategyPrediction]) {
     axisMap.set(point.time, toSeconds(point.time));
   }
   const axis = [...axisMap.entries()].sort((a, b) => a[1] - b[1]).map(([label]) => label);
@@ -30,20 +57,11 @@ function render(): void {
     const point = props.history.find((p) => p.time === label);
     return point ? point.score : null;
   });
-  let predictionData = axis.map((label) => {
-    const point = props.prediction.find((p) => p.time === label);
+  const predictionData = axis.map((label) => {
+    const point = strategyPrediction.find((p) => p.time === label);
     return point ? point.score : null;
   });
-  if (props.history.length > 0 && predictionData.some((v) => v !== null)) {
-    const lastTime = props.history[props.history.length - 1].time;
-    const index = axis.indexOf(lastTime);
-    if (index >= 0 && predictionData[index] === null) {
-      predictionData = [...predictionData];
-      predictionData[index] = props.history[props.history.length - 1].score;
-    }
-  }
-  const lastHistory = props.history[props.history.length - 1];
-  const lastPrediction = props.prediction[props.prediction.length - 1];
+  const lastPrediction = strategyPrediction[strategyPrediction.length - 1];
   chart.setOption(
     {
       grid: { left: 36, right: 42, top: 30, bottom: 26 },
@@ -76,16 +94,16 @@ function render(): void {
           name: '历史记录',
           type: 'line',
           data: historyData,
-          symbol: 'circle',
-          symbolSize: 5,
-          lineStyle: { width: 2, color: '#1677ff' },
+          symbol: 'none',
+          lineStyle: { width: 2, type: 'solid', color: '#1677ff' },
           itemStyle: { color: '#1677ff' },
+          z: 3,
           markPoint: lastHistory
             ? {
-                symbol: 'pin',
-                symbolSize: 42,
+                symbol: 'circle',
+                symbolSize: 8,
                 itemStyle: { color: '#1677ff' },
-                label: { fontSize: 10, color: '#fff', formatter: `当前\n${props.currentScore}` },
+                label: { fontSize: 10, color: '#1677ff', position: 'top', formatter: `${props.currentScore}` },
                 data: [{ coord: [lastHistory.time, lastHistory.score] }],
               }
             : undefined,
@@ -94,16 +112,17 @@ function render(): void {
           name: '策略预测',
           type: 'line',
           data: predictionData,
-          symbol: 'circle',
-          symbolSize: 5,
+          connectNulls: true,
+          symbol: 'none',
           lineStyle: { width: 2, type: 'dashed', color: '#fa8c16' },
           itemStyle: { color: '#fa8c16' },
+          z: 4,
           markPoint: lastPrediction
             ? {
-                symbol: 'pin',
-                symbolSize: 42,
+                symbol: 'circle',
+                symbolSize: 8,
                 itemStyle: { color: '#fa8c16' },
-                label: { fontSize: 10, color: '#fff', formatter: `预测\n${props.predictedScore}` },
+                label: { fontSize: 10, color: '#fa8c16', position: 'top', formatter: `${props.predictedScore}` },
                 data: [{ coord: [lastPrediction.time, lastPrediction.score] }],
               }
             : undefined,
@@ -128,7 +147,7 @@ onBeforeUnmount(() => {
   chart = null;
 });
 
-watch(() => [props.history, props.prediction], render, { deep: true });
+watch(() => [props.history, props.prediction, props.predictionHistory], render, { deep: true });
 </script>
 
 <template>

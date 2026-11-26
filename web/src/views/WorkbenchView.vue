@@ -37,7 +37,7 @@ function handleFocusInteraction(): void {
       </div>
       <div class="page-actions">
         <button class="btn" type="button" :disabled="app.busy || !app.state" @click="handleFocusInteraction">学生互动</button>
-        <button class="btn" type="button" :disabled="app.busy || !app.state || app.state.ended" @click="nextRound">模拟下一轮</button>
+        <button class="btn" type="button" :disabled="app.busy || !app.state || app.state.ended" @click="nextRound">下一环节</button>
         <button class="btn btn-danger" type="button" :disabled="app.busy || !app.state || app.state.ended" @click="handleEnd">结束课堂</button>
       </div>
     </div>

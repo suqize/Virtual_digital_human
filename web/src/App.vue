@@ -1,10 +1,29 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { onBeforeUnmount, onMounted, watch } from 'vue';
 import TopNav from './components/TopNav.vue';
 import WorkbenchView from './views/WorkbenchView.vue';
 import EvaluationView from './views/EvaluationView.vue';
 import PlanView from './views/PlanView.vue';
-import { app } from './store';
+import { app, pollLiveState } from './store';
+
+let pollTimer: number | undefined;
+let polling = false;
+
+onMounted(() => {
+  pollTimer = window.setInterval(async () => {
+    if (polling || app.busy || !app.state || app.state.ended) return;
+    polling = true;
+    try {
+      await pollLiveState();
+    } finally {
+      polling = false;
+    }
+  }, 4000);
+});
+
+onBeforeUnmount(() => {
+  if (pollTimer !== undefined) window.clearInterval(pollTimer);
+});
 
 watch(
   () => app.tab,

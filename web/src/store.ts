@@ -1,6 +1,6 @@
 import { reactive } from 'vue';
 import { api } from './api';
-import { buildMockEvaluation, buildMockPlan, buildMockState, mockEnd, mockInteract, mockNextRound } from './mock';
+import { buildMockEvaluation, buildMockPlan, buildMockState, mockEnd, mockInteract, mockNextRound, mockTickState } from './mock';
 import type { ClassroomState, Evaluation, Plan } from './types';
 
 export type TabKey = 'workbench' | 'evaluation' | 'plan';
@@ -30,8 +30,17 @@ export async function refreshState(): Promise<void> {
   } catch (error) {
     app.offline = true;
     app.state = app.state ?? buildMockState();
-    app.notice = (error as Error).message || '无法连接后端，已自动进入离线演示模式。';
+    app.notice = (error as Error).message || '无法连接后端，已切换到离线模式。';
   }
+}
+
+export async function pollLiveState(): Promise<void> {
+  if (!app.state || app.state.ended || app.busy) return;
+  if (app.offline) {
+    applyState(mockTickState(app.state));
+    return;
+  }
+  await refreshState();
 }
 
 export async function sendInteraction(text: string): Promise<void> {
@@ -101,7 +110,7 @@ export async function loadEvaluation(): Promise<void> {
 
 export async function loadPlan(): Promise<void> {
   if (app.offline) {
-    app.plan = buildMockPlan();
+    app.plan = buildMockPlan(app.state ?? buildMockState());
     return;
   }
   try {

@@ -12,6 +12,8 @@ TEACHER_NAME = "周老师"
 
 DIMENSIONS = ("概念理解", "图像解读", "推理解释", "迁移应用")
 DIMENSION_WEIGHTS = {"概念理解": 0.25, "图像解读": 0.25, "推理解释": 0.3, "迁移应用": 0.2}
+LIVE_UPDATE_SECONDS = 6
+STRATEGY_UPDATE_SECONDS = 60
 
 KEYWORDS: dict[str, tuple[str, ...]] = {
     "概念理解": ("斜率", "截距", "平行", "平移", "k", "b", "一次函数", "陡峭"),
@@ -69,43 +71,10 @@ ROUNDS: list[dict[str, Any]] = [
     },
 ]
 
-# 初始演示数据（对齐设计图：5 次学生互动、认知分 46 量级、已切换至双图对照）
-SEED_INTERACTIONS: list[tuple[str, str, str, str | None]] = [
-    ("02:10", "student", "k 是斜率，b 是截距，我是这样理解的。", "正常"),
-    ("02:15", "teacher", "很好，你已经说出了两个参数的名称。再看图像：直线的陡峭程度和谁有关？", None),
-    ("05:24", "student", "是不是 b 越大，直线就越陡？", "概念混淆"),
-    ("05:30", "teacher", "先不下结论。我们把两条线画在同一坐标系里，再追问一步：陡峭程度由谁决定？", None),
-    ("12:40", "student", "y=2x+1 经过 (0,1) 和 (1,3)；y=2x+3 经过 (0,3) 和 (1,5)。", "正常"),
-    ("12:46", "teacher", "两条线的变化量都是 2，起点不同。那么陡峭由谁决定，起点高度又由谁决定？", None),
-    ("21:05", "student", "斜率 k 决定陡峭，b 决定直线和 y 轴交在哪里。", "独立解释"),
-    ("21:10", "teacher", "区分得很清楚。现在比较 y=-x+2 和 y=-x-1，独立用两个点或变化量说明理由。", None),
-    ("30:22", "student", "变化量相同，都是 -1，所以两条线平行；y=-x+2 在 y=-x-1 上方 3 个单位。", "独立解释"),
-    ("30:28", "teacher", "用变化量说明平行，用起点说明位置，推理完整。最后一步：用自己的话说说为什么 y=2x+1 和 y=2x+3 平行？", None),
-]
-
-SEED_HISTORY: list[tuple[int, int]] = [(0, 38), (480, 42), (960, 44), (1440, 44), (1920, 45), (2400, 46), (2880, 46), (3240, 46)]
-
-SEED_EVIDENCE: list[dict[str, Any]] = [
-    {"time": "02:10", "dimension": "概念理解", "quote": "k 是斜率，b 是截距，我是这样理解的。", "delta": 4, "tag": "正常"},
-    {"time": "05:24", "dimension": "推理解释", "quote": "是不是 b 越大，直线就越陡？", "delta": -2, "tag": "概念混淆"},
-    {"time": "12:40", "dimension": "图像解读", "quote": "y=2x+1 经过 (0,1) 和 (1,3)；y=2x+3 经过 (0,3) 和 (1,5)。", "delta": 4, "tag": "正常"},
-    {"time": "21:05", "dimension": "概念理解", "quote": "斜率 k 决定陡峭，b 决定直线和 y 轴交在哪里。", "delta": 4, "tag": "独立解释"},
-    {"time": "30:22", "dimension": "推理解释", "quote": "变化量相同，都是 -1，所以两条线平行；y=-x+2 在 y=-x-1 上方 3 个单位。", "delta": 5, "tag": "独立解释"},
-]
-
-SEED_STRATEGY_RECORDS: list[dict[str, str]] = [
-    {"time": "00:00", "strategy": "读取图像", "note": "开场引导：观察两条直线的位置关系，形成初步猜想。"},
-    {"time": "05:30", "strategy": "口头追问", "note": "证据 05:24：学生只给出“b 越大越陡”的结论，缺少依据，触发口头追问。"},
-    {"time": "12:46", "strategy": "配点诊断", "note": "追问后仍不能指向具体点与数值，切换为代入求值验证。"},
-    {"time": "18:00", "strategy": "预测图像变化", "note": "基于 y=2x+1 的数据预测 y=2x+3 的变化，再代入验证。"},
-    {"time": "27:00", "strategy": "口头追问", "note": "追问“变化量 2 说明什么”，推动学生说出完整理由。"},
-    {"time": "33:00", "strategy": "双图对照", "note": "追问后仍把截距变化解释为倾斜程度变化，切换至双图对照区分 k 与 b 的作用。"},
-]
-
-SEED_DIMENSIONS: dict[str, dict[str, Any]] = {
-    "概念理解": {"score": 52, "observed": True},
-    "图像解读": {"score": 58, "observed": True},
-    "推理解释": {"score": 46, "observed": True},
+INITIAL_DIMENSIONS: dict[str, dict[str, Any]] = {
+    "概念理解": {"score": 52, "observed": False},
+    "图像解读": {"score": 58, "observed": False},
+    "推理解释": {"score": 46, "observed": False},
     "迁移应用": {"score": 38, "observed": False},
 }
 
@@ -120,6 +89,13 @@ TAG_STRATEGY: dict[str, str] = {
     "概念混淆": "双图对照",
     "只给结论": "口头追问",
     "独立解释": "独立练习",
+}
+
+FOCUS_STRATEGY = {
+    "概念理解": "双图对照",
+    "图像解读": "配点诊断",
+    "推理解释": "口头追问",
+    "迁移应用": "独立练习",
 }
 
 
@@ -140,29 +116,40 @@ class ClassroomService:
         self._reset()
 
     def _reset(self) -> None:
-        self._start_at = time.time() - (54 * 60 + 18)
+        self._start_at: float | None = None
         self._ended = False
-        self._round_index = 3
-        self._dimensions = {name: dict(info) for name, info in SEED_DIMENSIONS.items()}
+        self._round_index = 0
+        self._dimensions = {name: dict(info) for name, info in INITIAL_DIMENSIONS.items()}
         self._interactions = [
-            {
-                "id": index + 1,
-                "role": role,
-                "time": clock,
-                "text": text,
-                **({"tag": tag} if tag else {}),
-            }
-            for index, (clock, role, text, tag) in enumerate(SEED_INTERACTIONS)
+            {"id": 1, "role": "teacher", "time": "00:00", "text": f"课堂开始。{ROUNDS[0]['question']}"}
         ]
-        self._history = [{"time": fmt_mmss(sec), "score": score} for sec, score in SEED_HISTORY]
-        self._evidence = [dict(item) for item in SEED_EVIDENCE]
-        self._strategy_records = [dict(item) for item in SEED_STRATEGY_RECORDS]
+        self._history = [{"time": "00:00", "score": self._overall()}]
+        self._evidence = []
+        self._strategy_records = [
+            {"time": "00:00", "strategy": ROUNDS[0]["strategy"], "note": "开场引导：先观察图像并说出初步猜想。"}
+        ]
         self._message_seq = len(self._interactions)
+        self._last_live_bucket = 0
+        self._live_tick = 0
+        self._last_strategy_bucket = 0
+        self._last_prediction_bucket = -1
+        self._last_interaction_elapsed: int | None = None
+        self._cognition_metrics = {"attention": 78, "participation": 71, "confidence": 64}
+        self._intervention_metrics = {"confidence": 76, "intensity": 58, "focusDimension": "推理解释"}
+        self._prediction_history: list[dict[str, Any]] = []
+        self._prediction_current: list[dict[str, Any]] = []
+        self._prediction_generated_at = 0
+        self._refresh_prediction()
+        self._archive_prediction(force=True)
 
     # ---------- 基础计算 ----------
 
+    def _start_class(self) -> None:
+        if self._start_at is None and not self._ended:
+            self._start_at = time.time()
+
     def _elapsed(self) -> int:
-        return int(time.time() - self._start_at)
+        return int(time.time() - self._start_at) if self._start_at is not None else 0
 
     def _overall(self) -> int:
         total = sum(
@@ -177,22 +164,106 @@ class ClassroomService:
         if self._ended:
             return self._elapsed()
         remaining_rounds = len(ROUNDS) - 1 - self._round_index
-        return self._elapsed() + remaining_rounds * 8 * 60 + 4 * 60
+        return self._elapsed() + remaining_rounds * 4 * 60 + 4 * 60
 
     def _prediction(self) -> list[dict[str, Any]]:
         current = self._overall()
+        elapsed = self._elapsed()
         end_at = self._predicted_end()
         horizon = end_at + 5 * 60
         predicted = min(95, current + 6 + self._observed_count() * 2)
-        points: list[dict[str, Any]] = []
-        span = max(60, horizon - self._elapsed())
+        forecast_errors = (-2, 2, -1, 1)
+        anchor = max(0, min(100, current + forecast_errors[self._live_tick % len(forecast_errors)]))
+        span = max(60, horizon - elapsed)
+        anchor_time = parse_mmss(self._history[-1]["time"]) if self._history else elapsed
+        points: list[dict[str, Any]] = [{"time": fmt_mmss(anchor_time), "score": anchor}]
         for offset in (span // 4, span // 2, int(span * 0.75), span):
             frac = offset / span
             points.append({
-                "time": fmt_mmss(self._elapsed() + offset),
-                "score": int(current + (predicted - current) * frac + 0.5),
+                "time": fmt_mmss(elapsed + offset),
+                "score": max(0, min(100, int(anchor + (predicted - anchor) * frac + 0.5))),
             })
         return points
+
+    def _append_history_point(self) -> None:
+        point = {"time": fmt_mmss(self._elapsed()), "score": self._overall()}
+        if self._history and self._history[-1]["time"] == point["time"]:
+            self._history[-1] = point
+        else:
+            self._history.append(point)
+
+    def _refresh_prediction(self) -> None:
+        self._prediction_current = self._prediction()
+        self._prediction_generated_at = self._elapsed()
+
+    def _archive_prediction(self, force: bool = False) -> None:
+        elapsed = self._elapsed()
+        bucket = elapsed // 60
+        if not force and bucket <= self._last_prediction_bucket:
+            return
+        points = [dict(point) for point in self._prediction_current]
+        generated_at = fmt_mmss(self._prediction_generated_at)
+        if not self._prediction_history or self._prediction_history[-1]["points"] != points:
+            self._prediction_history.append({"generatedAt": generated_at, "points": points})
+        self._last_prediction_bucket = bucket
+
+    def _record_strategy(self, strategy: str, note: str, allow_repeat: bool = False) -> None:
+        if strategy == self._current_strategy() and not allow_repeat:
+            return
+        self._strategy_records.append({
+            "time": fmt_mmss(self._elapsed()),
+            "strategy": strategy,
+            "note": note,
+        })
+
+    def _advance_live_demo(self) -> None:
+        if self._ended:
+            return
+        elapsed = self._elapsed()
+        bucket = elapsed // LIVE_UPDATE_SECONDS
+        if bucket <= self._last_live_bucket:
+            return
+
+        self._archive_prediction()
+        self._last_live_bucket = bucket
+        self._live_tick += 1
+        tick = self._live_tick
+
+        dimension = DIMENSIONS[(tick - 1) % len(DIMENSIONS)]
+        score_deltas = (1, 1, 0, -1, 2, -1, 1, 0)
+        info = self._dimensions[dimension]
+        info["score"] = max(5, min(95, info["score"] + score_deltas[(tick - 1) % len(score_deltas)]))
+
+        metric_deltas = {
+            "attention": (2, -1, 1, -2, 1, 0),
+            "participation": (-1, 2, 0, 1, -2, 1),
+            "confidence": (1, 0, 2, -1, -2, 1),
+        }
+        for name, changes in metric_deltas.items():
+            self._cognition_metrics[name] = max(35, min(98, self._cognition_metrics[name] + changes[(tick - 1) % len(changes)]))
+
+        self._intervention_metrics["confidence"] = max(
+            55, min(96, self._intervention_metrics["confidence"] + (2, -1, 1, 0, -2, 1)[(tick - 1) % 6])
+        )
+        self._intervention_metrics["intensity"] = max(
+            35, min(90, self._intervention_metrics["intensity"] + (1, 1, -1, 2, -2, 0)[(tick - 1) % 6])
+        )
+        self._intervention_metrics["focusDimension"] = min(
+            self._dimensions, key=lambda name: self._dimensions[name]["score"]
+        )
+        self._append_history_point()
+        strategy_bucket = elapsed // STRATEGY_UPDATE_SECONDS
+        if strategy_bucket > self._last_strategy_bucket:
+            self._last_strategy_bucket = strategy_bucket
+            focus = self._intervention_metrics["focusDimension"]
+            strategy = FOCUS_STRATEGY[focus]
+            action = "调整为" if strategy != self._current_strategy() else "继续采用"
+            self._record_strategy(
+                strategy,
+                f"根据当前课堂关注维度“{focus}”，{action}“{strategy}”。",
+                allow_repeat=True,
+            )
+        self._refresh_prediction()
 
     def _current_strategy(self) -> str:
         return self._strategy_records[-1]["strategy"]
@@ -224,14 +295,16 @@ class ClassroomService:
             info["score"] = max(5, min(95, info["score"] + deltas[name]))
             if deltas[name] != 0:
                 info["observed"] = True
+        dimension = max(DIMENSIONS, key=lambda name: abs(deltas[name])) if any(deltas.values()) else "概念理解"
+        self._dimensions[dimension]["observed"] = True
         self._evidence.append({
             "time": fmt_mmss(self._elapsed()),
-            "dimension": max(DIMENSIONS, key=lambda name: abs(deltas[name])) if any(deltas.values()) else "推理解释",
+            "dimension": dimension,
             "quote": text,
             "delta": sum(deltas.values()),
             "tag": tag,
         })
-        self._history.append({"time": fmt_mmss(self._elapsed()), "score": self._overall()})
+        self._append_history_point()
 
     def _maybe_switch_strategy(self, tag: str) -> None:
         target = TAG_STRATEGY.get(tag)
@@ -243,23 +316,24 @@ class ClassroomService:
             "口头追问": "学生只给出结论、缺少依据，触发口头追问，逼出推理过程。",
             "独立练习": "学生能独立给出完整解释，撤去提示进入独立练习，检验迁移。",
         }
-        self._strategy_records.append({
-            "time": fmt_mmss(self._elapsed()),
-            "strategy": target,
-            "note": note_map.get(target, f"依据学生回答切换至{title}。"),
-        })
+        self._record_strategy(target, note_map.get(target, f"依据学生回答切换至{title}。"))
 
     # ---------- 对外操作 ----------
 
-    def interact(self, text: str) -> dict[str, Any]:
+    def interact(self, text: str, teacher_reply: str | None = None) -> dict[str, Any]:
         text = (text or "").strip()
         if not text:
             raise ValueError("请先输入学生回答。")
         if len(text) > 800:
             raise ValueError("单条回复请控制在 800 字以内。")
         with self._lock:
+            self._start_class()
             if self._ended:
-                raise ValueError("课堂已结束，如需继续演示请点击“重新演示”。")
+                raise ValueError("课堂已结束，请重新开始课堂。")
+            self._advance_live_demo()
+            self._refresh_prediction()
+            self._archive_prediction(force=True)
+            self._last_interaction_elapsed = self._elapsed()
             _, tag = self._score_message(text)
             self._interactions.append({
                 "id": self._message_seq + 1,
@@ -275,15 +349,16 @@ class ClassroomService:
                 "id": self._message_seq + 1,
                 "role": "teacher",
                 "time": fmt_mmss(self._elapsed()),
-                "text": RESPONSES[tag],
+                "text": (teacher_reply or "").strip() or RESPONSES[tag],
             })
             self._message_seq += 1
             return self._snapshot()
 
     def next_round(self) -> dict[str, Any]:
         with self._lock:
+            self._start_class()
             if self._ended:
-                raise ValueError("课堂已结束，如需继续演示请点击“重新演示”。")
+                raise ValueError("课堂已结束，请重新开始课堂。")
             if self._round_index >= len(ROUNDS) - 1:
                 self._interactions.append({
                     "id": self._message_seq + 1,
@@ -293,6 +368,9 @@ class ClassroomService:
                 })
                 self._message_seq += 1
                 return self._snapshot()
+            self._advance_live_demo()
+            self._refresh_prediction()
+            self._archive_prediction(force=True)
             self._round_index += 1
             rnd = ROUNDS[self._round_index]
             self._interactions.append({
@@ -302,14 +380,18 @@ class ClassroomService:
                 "text": f"进入下一环节（{rnd['strategy']}）：{rnd['question']}",
             })
             self._message_seq += 1
-            self._history.append({"time": fmt_mmss(self._elapsed()), "score": self._overall()})
+            self._append_history_point()
+            self._record_strategy(rnd["strategy"], f"进入“{rnd['board_title']}”环节，采用“{rnd['strategy']}”。", allow_repeat=True)
             return self._snapshot()
 
     def end_class(self) -> dict[str, Any]:
         with self._lock:
             if not self._ended:
+                self._start_class()
+                self._advance_live_demo()
+                self._refresh_prediction()
                 self._ended = True
-                self._history.append({"time": fmt_mmss(self._elapsed()), "score": self._overall()})
+                self._append_history_point()
             return self._snapshot()
 
     def reset(self) -> dict[str, Any]:
@@ -324,11 +406,22 @@ class ClassroomService:
             return self._snapshot()
 
     def _snapshot(self) -> dict[str, Any]:
+        self._start_class()
+        self._advance_live_demo()
         rnd = ROUNDS[self._round_index]
-        prediction = [] if self._ended else self._prediction()
+        if not self._ended:
+            self._refresh_prediction()
+            self._archive_prediction()
+        prediction = self._prediction_current
         last_record = self._strategy_records[-1]
         previous = self._strategy_records[-2] if len(self._strategy_records) >= 2 else None
         title, description = STRATEGY_META[last_record["strategy"]]
+        if self._ended:
+            intervention_status = "课堂已结束"
+        elif self._last_interaction_elapsed is not None and self._elapsed() - self._last_interaction_elapsed < 18:
+            intervention_status = "刚根据互动调整"
+        else:
+            intervention_status = "策略跟进中"
         return {
             "course": {"title": COURSE_TITLE, "student": STUDENT_NAME, "teacher": TEACHER_NAME},
             "elapsedSeconds": self._elapsed(),
@@ -348,7 +441,12 @@ class ClassroomService:
                 "predictedScore": prediction[-1]["score"] if prediction else self._overall(),
                 "history": [dict(item) for item in self._history],
                 "prediction": prediction,
+                "predictionHistory": [
+                    {"generatedAt": item["generatedAt"], "points": [dict(point) for point in item["points"]]}
+                    for item in self._prediction_history
+                ],
                 "predictedEndLabel": f"预计结束课堂时间 {fmt_mmss(self._predicted_end())}",
+                "liveMetrics": dict(self._cognition_metrics),
                 "dimensions": [
                     {"name": name, "score": info["score"], "observed": info["observed"]}
                     for name, info in self._dimensions.items()
@@ -356,12 +454,13 @@ class ClassroomService:
                 "observedCount": self._observed_count(),
             },
             "intervention": {
-                "status": "已切换",
+                "status": intervention_status,
                 "from": previous["strategy"] if previous else "——",
                 "strategy": last_record["strategy"],
                 "title": title,
                 "description": description,
                 "reason": last_record["note"],
+                "metrics": dict(self._intervention_metrics),
                 "records": [dict(item) for item in self._strategy_records],
             },
             "evidence": [dict(item) for item in self._evidence],
@@ -395,18 +494,6 @@ class ClassroomService:
         return points[-1][1]
 
     def _dimension_review(self) -> list[dict[str, Any]]:
-        quotes = {
-            "概念理解": "斜率 k 决定陡峭，b 决定直线和 y 轴交在哪里。",
-            "图像解读": "y=2x+1 经过 (0,1) 和 (1,3)；y=2x+3 经过 (0,3) 和 (1,5)。",
-            "推理解释": "是不是 b 越大，直线就越陡？",
-            "迁移应用": "本节课尚未出现独立迁移作答，暂无线索。",
-        }
-        conclusions = {
-            "概念理解": "能说清 k 与 b 的作用，但前期曾把截距变化理解为倾斜程度变化，追问与双图对照后可独立区分。",
-            "图像解读": "能从图像读出关键点坐标，比较两条直线的位置与距离，读图证据较充分。",
-            "推理解释": "推理链条不完整：追问后仍把截距变化解释为倾斜程度变化，需补“两个点或变化量”的说明步骤。",
-            "迁移应用": "本节课未采集到独立迁移证据，需要下节课独立练习环节重点观测。",
-        }
         suggestions = {
             "概念理解": "下节课用 2–3 组不同参数的函数再验证一次。",
             "图像解读": "可加入带负斜率的函数组继续巩固。",
@@ -417,20 +504,29 @@ class ClassroomService:
         for name in DIMENSIONS:
             info = self._dimensions[name]
             score = info["score"]
+            latest_evidence = next((item for item in reversed(self._evidence) if item["dimension"] == name), None)
             if not info["observed"]:
                 status = "待收集证据"
+                quote = "尚未采集到该维度的学生回答。"
+                conclusion = f"当前评分为 {score} 分，尚未采集该维度的学生回答。"
             elif score >= 60:
                 status = "已有基础"
+                quote = latest_evidence["quote"] if latest_evidence else "已采集到互动证据。"
+                conclusion = f"基于最近一次回答，该维度当前评分为 {score} 分。"
             elif score >= 45:
                 status = "仍需巩固"
+                quote = latest_evidence["quote"] if latest_evidence else "已采集到互动证据。"
+                conclusion = f"基于最近一次回答，该维度当前评分为 {score} 分，建议继续通过追问和练习巩固。"
             else:
                 status = "需要进一步支持"
+                quote = latest_evidence["quote"] if latest_evidence else "已采集到互动证据。"
+                conclusion = f"基于最近一次回答，该维度当前评分为 {score} 分，建议提供分步提示后再练习。"
             rows.append({
                 "name": name,
                 "score": score,
                 "status": status,
-                "quote": quotes[name],
-                "conclusion": conclusions[name],
+                "quote": quote,
+                "conclusion": conclusion,
                 "suggestion": suggestions[name],
             })
         return rows
@@ -461,7 +557,7 @@ class ClassroomService:
                 row["detail"] = STRATEGY_META[row["strategy"]][1]
 
             reviews = self._dimension_review()
-            observed = [row for row in reviews if row["status"] != "待收集证据"]
+            observed = [row for row in reviews if row["status"] != "待收集证据"] or reviews
             strongest = max(observed, key=lambda row: row["score"])
             weakest = min(observed, key=lambda row: row["score"])
             summary = (
@@ -469,7 +565,7 @@ class ClassroomService:
                 f"{'、'.join(row['strategy'] for row in rows)} 等 {sum(row['triggers'] for row in rows)} 次教学干预。"
                 f"认知分由 {self._history[0]['score']} 提升至 {self._history[-1]['score']}："
                 + "、".join(f"“{row['strategy']}”{row['status']}（{row['before']}→{row['after']}）" for row in rows[:3])
-                + "。学生已能区分 k 与 b 的作用，推理链条完整性仍是主要缺口。"
+                + "。评价依据以课堂记录中的互动证据为准。"
             )
             comment = (
                 f"林同学本节课的优点是{strongest['name']}（{strongest['score']} 分）：{strongest['conclusion'].split('，')[0]}。"
@@ -497,11 +593,14 @@ class ClassroomService:
     def plan(self) -> dict[str, Any]:
         with self._lock:
             reviews = self._dimension_review()
-            observed = [row for row in reviews if row["status"] != "待收集证据"]
+            observed = [row for row in reviews if row["status"] != "待收集证据"] or reviews
             weakest = min(observed, key=lambda row: row["score"])
             basis_evidence = next(
                 (item for item in reversed(self._evidence) if item["dimension"] == weakest["name"]),
-                self._evidence[-1],
+                self._evidence[-1] if self._evidence else {
+                    "time": "00:00",
+                    "quote": "尚无学生回答；本方案暂按课堂初始情境生成。",
+                },
             )
             return {
                 "goal": {

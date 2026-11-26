@@ -27,6 +27,17 @@ export interface CognitionPoint {
   score: number;
 }
 
+export interface PredictionRun {
+  generatedAt: string;
+  points: CognitionPoint[];
+}
+
+export interface CognitionLiveMetrics {
+  attention: number;
+  participation: number;
+  confidence: number;
+}
+
 export interface DimensionInfo {
   name: string;
   score: number;
@@ -38,7 +49,9 @@ export interface Cognition {
   predictedScore: number;
   history: CognitionPoint[];
   prediction: CognitionPoint[];
+  predictionHistory: PredictionRun[];
   predictedEndLabel: string;
+  liveMetrics: CognitionLiveMetrics;
   dimensions: DimensionInfo[];
   observedCount: number;
 }
@@ -56,6 +69,7 @@ export interface Intervention {
   title: string;
   description: string;
   reason: string;
+  metrics: { confidence: number; intensity: number; focusDimension: string };
   records: InterventionRecord[];
 }
 

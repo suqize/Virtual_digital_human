@@ -313,7 +313,27 @@ class DemoHandler(BaseHTTPRequestHandler):
 
     def _classroom_interact(self) -> dict:
         data = _read_json(self)
-        return classroom.interact(str(data.get("text", "")))
+        text = data.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("请先输入学生回答。")
+        text = text.strip()
+        if len(text) > 800:
+            raise ValueError("单条回复请控制在 800 字以内。")
+
+        previous = classroom.snapshot()["interactions"][-10:]
+        history = [
+            {
+                "role": "user" if item["role"] == "student" else "assistant",
+                "content": item["text"],
+            }
+            for item in previous
+        ]
+        history.append({"role": "user", "content": text})
+        try:
+            teacher_reply = call_model(history)
+        except RuntimeError:
+            teacher_reply = "我已记录你的回答。当前智能讲解暂不可用，请检查 LinkAPI 配置后再继续提问。"
+        return classroom.interact(text, teacher_reply)
 
     def _teach(self) -> None:
         try:

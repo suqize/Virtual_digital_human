@@ -24,7 +24,7 @@ const tabs: { key: TabKey; label: string }[] = [
       </button>
     </nav>
     <div class="nav-right">
-      <span v-if="app.offline" class="offline-badge">离线演示模式</span>
+      <span v-if="app.offline" class="offline-badge">离线模式</span>
     </div>
   </header>
 </template>

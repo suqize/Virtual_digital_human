@@ -383,6 +383,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   overflow-y: auto;
   padding: 2px;
 }
+.interaction-record-note { margin: 0 0 8px; color: var(--muted); font-size: 11px; }
 .msg { display: flex; gap: 9px; max-width: 92%; }
 .msg .msg-avatar {
   flex: none;
@@ -434,6 +435,10 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 /* ---------- 认知状态 ---------- */
 .cognition-chart { width: 100%; height: 216px; }
 .end-label { margin: 6px 2px 12px; font-size: 11.5px; color: var(--muted); }
+.live-value-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 0 0 12px; }
+.live-value { min-width: 0; padding: 8px 9px; border: 1px solid var(--line); border-radius: 9px; background: #fbfcfe; }
+.live-value span { display: block; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.live-value b { display: block; margin-top: 3px; color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .dim-row { display: grid; grid-template-columns: 64px 1fr 34px 58px; align-items: center; gap: 10px; padding: 6px 0; }
 .dim-name { font-size: 12.5px; color: var(--text); }
 .dim-bar { height: 8px; border-radius: 5px; background: #eef1f5; overflow: hidden; }

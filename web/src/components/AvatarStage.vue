@@ -170,7 +170,7 @@ const plottedLines = computed(() =>
         <img :src="avatarPreview" alt="数字人形象预览" />
         <div class="idle-title">数字人课堂尚未连接</div>
         <div class="idle-copy">
-          <template v-if="app.offline">当前为离线演示模式，数字人视频流不连接；文字互动与数据闭环仍可演示。</template>
+          <template v-if="app.offline">当前处于离线模式，数字人视频流未连接；文字互动与课堂记录仍可使用。</template>
           <template v-else-if="avatar.configError">{{ avatar.configError }}</template>
           <template v-else>连接后，周老师将通过火山引擎实时数字人开始授课；课堂底部展示当前提问。</template>
         </div>

@@ -24,17 +24,23 @@ const showBasis = ref(false);
       <CognitionChart
         :history="cognition.history"
         :prediction="cognition.prediction"
+        :prediction-history="cognition.predictionHistory"
         :current-score="cognition.score"
         :predicted-score="cognition.predictedScore"
       />
       <p class="end-label">{{ cognition.predictedEndLabel }}</p>
+      <div class="live-value-grid cognition-live-values">
+        <div class="live-value"><span>专注度</span><b>{{ cognition.liveMetrics.attention }}%</b></div>
+        <div class="live-value"><span>参与度</span><b>{{ cognition.liveMetrics.participation }}%</b></div>
+        <div class="live-value"><span>回答信心</span><b>{{ cognition.liveMetrics.confidence }}%</b></div>
+      </div>
       <DimensionBars :dimensions="cognition.dimensions" />
       <button class="panel-link" type="button" @click="showBasis = !showBasis">
         评估与预测依据（已观测 {{ cognition.observedCount }}/{{ cognition.dimensions.length }} 个维度）
       </button>
       <div v-if="showBasis" class="detail-box no-print">
-        <p>评估依据：对课堂互动证据按 4 个认知维度逐项计分（关键词命中 + 回答结构），总分按 概念理解 25% / 图像解读 25% / 推理解释 30% / 迁移应用 20% 加权。</p>
-        <p>预测依据：以当前分为起点，按已观测维度数量估计干预增益，外推至课后 5 分钟，虚线为策略预测。</p>
+        <p>认知趋势随课堂进程更新，学生提交的回答会作为课堂互动证据记录。</p>
+        <p>虚线显示策略预测，较早生成的预测值会继续保留在这条线上。</p>
         <p v-if="evidence && evidence.length">
           最近证据：{{ evidence[evidence.length - 1].time }}「{{ evidence[evidence.length - 1].quote }}」（{{ evidence[evidence.length - 1].dimension }}，Δ{{ evidence[evidence.length - 1].delta }}）
         </p>
